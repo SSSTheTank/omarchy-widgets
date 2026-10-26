@@ -23,7 +23,7 @@ face "minarchy" {
   state showSettings = false
 
   // Settings states
-  state launcherTitle = "minarchy" persist
+  let launcherTitle = "minarchy"
   state numApps = 6 persist
   state showDateTime = true persist
   state clockFormat = "12-hour" persist
@@ -94,10 +94,6 @@ face "minarchy" {
             androidApp(clockApp.key)
           }
         }
-        onLongPress: {
-          haptic()
-          showSettings = true
-        }
       }
       Text {
         text: fmtTime(now, "EEE, d MMM") + (bat != null ? ", ${bat.level}%" : "")
@@ -115,10 +111,6 @@ face "minarchy" {
           } else {
             url("content://com.android.calendar/time/")
           }
-        }
-        onLongPress: {
-          haptic()
-          showSettings = true
         }
       }
       if showScreenTime {
@@ -140,7 +132,7 @@ face "minarchy" {
     let itemApp = isPhone ? phone : (isMsgs ? msgs : (apps ?? []).find(a => a.key == slotKey || a.package == slotKey))
     let badge = isPhone ? missed : (isMsgs ? unread : 0)
     let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "ADD APP"))
-    let label = (renames ?? {})[slotKey] ?? ((renames ?? {})[str(i)] ?? defaultName)
+    let label = (renames ?? {})[slotKey] ?? defaultName
 
     Text {
       spans: [label, badge > 0 ? {text: "  ${badge}", color: accent, fontSize: 15, fontWeight: 400} : ""]
@@ -159,7 +151,7 @@ face "minarchy" {
           if msgs != null { androidApp(msgs.key) } else { url("sms:") }
         } else if itemApp != null {
           androidApp(itemApp.key)
-        } else if startsWith(slotKey, "com.") || startsWith(slotKey, "org.") {
+        } else if contains(slotKey, ".") {
           androidApp(slotKey)
         } else {
           haptic()
@@ -233,6 +225,11 @@ face "minarchy" {
     }
   }
 
+  // Divider line
+  component Sep() {
+    Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+  }
+
   // Action sheet for long-press on an app slot
   component ActionSheet() {
     let cur = slots ?? defaultSlots
@@ -241,7 +238,7 @@ face "minarchy" {
     let isMsgs = targetKey == "special:messages" || (msgs != null && targetKey == msgs.key)
     let itemApp = isPhone ? phone : (isMsgs ? msgs : (apps ?? []).find(a => a.key == targetKey || a.package == targetKey))
     let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "ADD APP"))
-    let targetName = (renames ?? {})[targetKey] ?? ((renames ?? {})[str(actionSlot)] ?? defaultName)
+    let targetName = (renames ?? {})[targetKey] ?? defaultName
     Column {
       fill: true
       padding: wide ? [40, 24] : [24, 20]
@@ -273,7 +270,7 @@ face "minarchy" {
             onTap: actionSlot = null
           }
         }
-        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Sep { }
         Text {
           text: "Change App"
           fontSize: 16
@@ -287,7 +284,7 @@ face "minarchy" {
             search = ""
           }
         }
-        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Sep { }
         Text {
           text: "Rename"
           fontSize: 16
@@ -301,7 +298,7 @@ face "minarchy" {
             renameText = targetName
           }
         }
-        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Sep { }
         Text {
           text: "Change Wallpaper"
           fontSize: 16
@@ -314,7 +311,7 @@ face "minarchy" {
             run("[ -f ~/.config/omalauncher/wallpaper.sh ] && bash ~/.config/omalauncher/wallpaper.sh")
           }
         }
-        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Sep { }
         Text {
           text: "minarchy settings"
           fontSize: 16
@@ -327,7 +324,7 @@ face "minarchy" {
             showSettings = true
           }
         }
-        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Sep { }
         Text {
           text: "Remove from home"
           fontSize: 16
@@ -618,7 +615,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -642,7 +639,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -668,7 +665,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -691,7 +688,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -755,7 +752,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -778,8 +775,7 @@ face "minarchy" {
           }
         }
 
-
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -803,7 +799,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -827,8 +823,7 @@ face "minarchy" {
           }
         }
 
-
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -852,7 +847,7 @@ face "minarchy" {
           }
         }
 
-        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+        Sep { }
 
         Row {
           fill: width
@@ -878,8 +873,6 @@ face "minarchy" {
           }
         }
       }
-
-
 
       Spacer { height: screenInset + 20 }
     }
