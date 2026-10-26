@@ -24,7 +24,6 @@ face "minarchy" {
 
   // Settings states
   let launcherTitle = "minarchy"
-  state numApps = 6 persist
   state showDateTime = true persist
   state clockFormat = "12-hour" persist
   state appAlignment = "Left" persist
@@ -56,7 +55,7 @@ face "minarchy" {
     "slot:5",
     "slot:6"
   ]
-  let activeSlots = (slots ?? defaultSlots).take(numApps)
+  let activeSlots = (slots ?? defaultSlots).take(12)
 
   let allApps = (apps ?? []).filter(a => a.name != null && a.name != "").sortBy(a => lower(a.name))
   let searching = trim(search) != ""
@@ -196,19 +195,21 @@ face "minarchy" {
           showSettings = true
         }
       }
-      Spacer { weight: 1 }
-      Text {
-        text: "+ app"
-        font: activeFont
-        fontSize: 13
-        fontWeight: 400
-        letterSpacing: 2
-        color: alpha(foreground, 0.45)
-        padding: [6, 12]
-        onTap: {
-          haptic()
-          pickerSlot = -1
-          search = ""
+      if len(activeSlots) < 12 {
+        Spacer { weight: 1 }
+        Text {
+          text: "+ app"
+          font: activeFont
+          fontSize: 13
+          fontWeight: 400
+          letterSpacing: 2
+          color: alpha(foreground, 0.45)
+          padding: [6, 12]
+          onTap: {
+            haptic()
+            pickerSlot = -1
+            search = ""
+          }
         }
       }
     }
@@ -579,32 +580,6 @@ face "minarchy" {
           fontWeight: 400
           padding: [4, 0, 12, 0]
         }
-
-        Row {
-          fill: width
-          align: center
-          padding: [12, 0]
-          onTap: {
-            haptic()
-            let appCounts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12]
-            let idx = indexOf(appCounts, numApps)
-            let nextIdx = idx < 0 ? 8 : (idx + 1) % len(appCounts)
-            numApps = appCounts[nextIdx]
-          }
-          Text {
-            text: "Apps on home screen"
-            fontSize: 16
-            fontWeight: 400
-          }
-          Spacer { weight: 1 }
-          Text {
-            text: str(numApps)
-            fontSize: 16
-            fontWeight: 600
-          }
-        }
-
-        Sep { }
 
         Row {
           fill: width
