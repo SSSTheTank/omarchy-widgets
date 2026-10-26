@@ -1,5 +1,5 @@
 face "minarchy" {
-  // Distraction-free home page with press & hold settings, wallpaper switching, and full customizability.
+  // Distraction-free home page inspired by Olauncher. Heavily edited version based on minimal by Simon Schubert.
 
   meta { owl: 13; description: "Distraction-free home page with wallpaper switcher, digital clock, date/battery line, and customizable app list"; version: "1.0"; license: "MIT"; category: "productivity" }
   requires { pacman: ["ttf-jetbrains-mono"] }
