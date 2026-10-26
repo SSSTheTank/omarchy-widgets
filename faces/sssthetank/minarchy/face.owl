@@ -24,7 +24,7 @@ face "minarchy" {
 
   // Settings states
   state launcherTitle = "minarchy" persist
-  state numApps = 8 persist
+  state numApps = 6 persist
   state showDateTime = true persist
   state clockFormat = "12-hour" persist
   state appAlignment = "Left" persist
@@ -44,27 +44,18 @@ face "minarchy" {
   let missed = n.available && phone != null ? len(n.items.filter(i => i.package == phone.package)) : 0
   let unread = n.available && msgs != null ? len(n.items.filter(i => i.package == msgs.package)) : 0
 
-  let browser = (apps ?? []).find(a => a.profile == null && (contains(["com.android.chrome", "org.mozilla.firefox"], a.package) || contains(lower(a.name), "chrome") || contains(lower(a.name), "browser")))
-  let photos = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.apps.photos", "com.samsung.android.gallery", "com.android.gallery3d"], a.package) || lower(a.name) == "photos" || lower(a.name) == "gallery"))
-  let camera = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.GoogleCamera", "com.sec.android.app.camera", "com.android.camera"], a.package) || contains(lower(a.name), "camera")))
-  let google = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.googlequicksearchbox"], a.package) || lower(a.name) == "google"))
-  let gemini = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.apps.bard"], a.package) || contains(lower(a.name), "gemini")))
-
   let clockApp = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.deskclock", "com.sec.android.app.clockpackage", "com.android.deskclock"], a.package) || contains(lower(a.name), "clock")))
   let calApp = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.calendar", "com.samsung.android.calendar", "com.android.calendar", "org.fossify.calendar", "ws.xsoh.etar"], a.package) || contains(lower(a.name), "calendar")))
 
   let wide = (tileWidth ?? 0) > (tileHeight ?? 1)
-  let topApps = (apps ?? []).filter(a => a.profile == null && !a.system && (phone == null || a.package != phone.package) && (msgs == null || a.package != msgs.package)).sortBy(a => -a.score)
 
   let defaultSlots = [
-    phone != null ? phone.key : "special:phone",
-    msgs != null ? msgs.key : "special:messages",
-    camera != null ? camera.key : (len(topApps) > 0 ? topApps[0].key : "camera"),
-    photos != null ? photos.key : (len(topApps) > 1 ? topApps[1].key : "photos"),
-    browser != null ? browser.key : (len(topApps) > 2 ? topApps[2].key : "browser"),
-    clockApp != null ? clockApp.key : (len(topApps) > 3 ? topApps[3].key : "clock"),
-    calApp != null ? calApp.key : (len(topApps) > 4 ? topApps[4].key : "calendar"),
-    gemini != null ? gemini.key : (google != null ? google.key : (len(topApps) > 5 ? topApps[5].key : "search"))
+    "slot:1",
+    "slot:2",
+    "slot:3",
+    "slot:4",
+    "slot:5",
+    "slot:6"
   ]
   let activeSlots = (slots ?? defaultSlots).take(numApps)
 
@@ -148,7 +139,7 @@ face "minarchy" {
     let isMsgs = slotKey == "special:messages" || (msgs != null && slotKey == msgs.key)
     let itemApp = isPhone ? phone : (isMsgs ? msgs : (apps ?? []).find(a => a.key == slotKey || a.package == slotKey))
     let badge = isPhone ? missed : (isMsgs ? unread : 0)
-    let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "Select App"))
+    let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "ADD APP"))
     let label = (renames ?? {})[slotKey] ?? ((renames ?? {})[str(i)] ?? defaultName)
 
     Text {
@@ -249,7 +240,7 @@ face "minarchy" {
     let isPhone = targetKey == "special:phone" || (phone != null && targetKey == phone.key)
     let isMsgs = targetKey == "special:messages" || (msgs != null && targetKey == msgs.key)
     let itemApp = isPhone ? phone : (isMsgs ? msgs : (apps ?? []).find(a => a.key == targetKey || a.package == targetKey))
-    let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "Select App"))
+    let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "ADD APP"))
     let targetName = (renames ?? {})[targetKey] ?? ((renames ?? {})[str(actionSlot)] ?? defaultName)
     Column {
       fill: true
