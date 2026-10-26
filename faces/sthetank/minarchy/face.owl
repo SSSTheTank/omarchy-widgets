@@ -28,7 +28,6 @@ face "minarchy" {
   state showDateTime = true persist
   state clockFormat = "12-hour" persist
   state appAlignment = "Left" persist
-  state showScreenTime = false persist
   state dailyWallpaper = false persist
   state boldFont = false persist
   state textSize = 1.0 persist
@@ -111,16 +110,6 @@ face "minarchy" {
           } else {
             url("content://com.android.calendar/time/")
           }
-        }
-      }
-      if showScreenTime {
-        Text {
-          text: bat != null ? "battery: ${bat.level}% · screen time on" : "screen time on"
-          fontSize: 13
-          fontWeight: 400
-          color: alpha(foreground, 0.6)
-          align: textAlignment
-          padding: [2, 0]
         }
       }
     }
@@ -685,30 +674,6 @@ face "minarchy" {
             text: appAlignment
             fontSize: 16
             fontWeight: 600
-          }
-        }
-
-        Sep { }
-
-        Row {
-          fill: width
-          align: center
-          padding: [12, 0]
-          onTap: {
-            haptic()
-            showScreenTime = !showScreenTime
-          }
-          Text {
-            text: "Screen time"
-            fontSize: 16
-            fontWeight: 400
-          }
-          Spacer { weight: 1 }
-          Text {
-            text: showScreenTime ? "On" : "Off"
-            fontSize: 16
-            fontWeight: 600
-            color: showScreenTime ? foreground : muted
           }
         }
       }
