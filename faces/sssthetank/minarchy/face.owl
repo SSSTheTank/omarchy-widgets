@@ -1,0 +1,956 @@
+face "minarchy" {
+  // Distraction-free home page with press & hold settings, wallpaper switching, and full customizability.
+
+  meta { owl: 13; description: "Distraction-free home page with wallpaper switcher, digital clock, date/battery line, and customizable app list"; version: "1.0"; license: "MIT"; category: "productivity" }
+  requires { pacman: ["ttf-jetbrains-mono"] }
+
+  state showStatusBar = false persist
+  statusBar: showStatusBar
+
+  source now = clock every 1m
+  source bat = android.battery
+  source alarm = android.alarm
+  source n = android.notifications
+  source apps = android.apps
+
+  state slots = null persist
+  state renames = {} persist
+  state actionSlot = null
+  state renamingSlot = null
+  state renameText = ""
+  state pickerSlot = null
+  state search = ""
+  state showSettings = false
+
+  // Settings states
+  state launcherTitle = "minarchy" persist
+  state numApps = 8 persist
+  state showDateTime = true persist
+  state clockFormat = "12-hour" persist
+  state appAlignment = "Left" persist
+  state showScreenTime = false persist
+  state dailyWallpaper = false persist
+  state boldFont = false persist
+  state textSize = 1.0 persist
+
+
+  let jbmono = "/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf"
+  let jbbold = "/usr/share/fonts/TTF/JetBrainsMono-Bold.ttf"
+  let activeFont = boldFont ? jbbold : jbmono
+
+  // System apps matching
+  let phone = (apps ?? []).find(a => a.profile == null && contains(["com.google.android.dialer", "com.samsung.android.dialer", "com.android.dialer", "org.fossify.phone"], a.package))
+  let msgs = (apps ?? []).find(a => a.profile == null && contains(["com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging", "org.fossify.messages"], a.package))
+  let missed = n.available && phone != null ? len(n.items.filter(i => i.package == phone.package)) : 0
+  let unread = n.available && msgs != null ? len(n.items.filter(i => i.package == msgs.package)) : 0
+
+  let browser = (apps ?? []).find(a => a.profile == null && (contains(["com.android.chrome", "org.mozilla.firefox"], a.package) || contains(lower(a.name), "chrome") || contains(lower(a.name), "browser")))
+  let photos = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.apps.photos", "com.samsung.android.gallery", "com.android.gallery3d"], a.package) || lower(a.name) == "photos" || lower(a.name) == "gallery"))
+  let camera = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.GoogleCamera", "com.sec.android.app.camera", "com.android.camera"], a.package) || contains(lower(a.name), "camera")))
+  let google = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.googlequicksearchbox"], a.package) || lower(a.name) == "google"))
+  let gemini = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.apps.bard"], a.package) || contains(lower(a.name), "gemini")))
+
+  let clockApp = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.deskclock", "com.sec.android.app.clockpackage", "com.android.deskclock"], a.package) || contains(lower(a.name), "clock")))
+  let calApp = (apps ?? []).find(a => a.profile == null && (contains(["com.google.android.calendar", "com.samsung.android.calendar", "com.android.calendar", "org.fossify.calendar", "ws.xsoh.etar"], a.package) || contains(lower(a.name), "calendar")))
+
+  let wide = (tileWidth ?? 0) > (tileHeight ?? 1)
+  let topApps = (apps ?? []).filter(a => a.profile == null && !a.system && (phone == null || a.package != phone.package) && (msgs == null || a.package != msgs.package)).sortBy(a => -a.score)
+
+  let defaultSlots = [
+    phone != null ? phone.key : "special:phone",
+    msgs != null ? msgs.key : "special:messages",
+    camera != null ? camera.key : (len(topApps) > 0 ? topApps[0].key : "camera"),
+    photos != null ? photos.key : (len(topApps) > 1 ? topApps[1].key : "photos"),
+    browser != null ? browser.key : (len(topApps) > 2 ? topApps[2].key : "browser"),
+    clockApp != null ? clockApp.key : (len(topApps) > 3 ? topApps[3].key : "clock"),
+    calApp != null ? calApp.key : (len(topApps) > 4 ? topApps[4].key : "calendar"),
+    gemini != null ? gemini.key : (google != null ? google.key : (len(topApps) > 5 ? topApps[5].key : "search"))
+  ]
+  let activeSlots = (slots ?? defaultSlots).take(numApps)
+
+  let allApps = (apps ?? []).filter(a => a.name != null && a.name != "").sortBy(a => lower(a.name))
+  let searching = trim(search) != ""
+  let pickerApps = searching ? rank(allApps, search) : allApps
+
+  let textAlignment = appAlignment == "Center" ? "center" : (appAlignment == "Right" ? "end" : "start")
+  let appWeight = boldFont ? 700 : 400
+  let appSize = round(26 * textSize)
+
+  padding: 0
+
+  // The Header: modern digital clock and unified date & battery line
+  component Day() {
+    Column {
+      gap: 4
+      fill: width
+      align: textAlignment
+      onLongPress: {
+        haptic()
+        showSettings = true
+      }
+      Text {
+        text: clockFormat == "24-hour" ? fmtTime(now, "HH:mm") : (clockFormat == "12-hour (AM/PM)" ? fmtTime(now, "h:mm a") : fmtTime(now, "h:mm"))
+        font: activeFont
+        fontSize: round(76 * textSize)
+        fontWeight: appWeight
+        letterSpacing: -2
+        maxLines: 1
+        align: textAlignment
+        onTap: {
+          if alarm != null && alarm.app != null {
+            androidApp(alarm.app)
+          } else if clockApp != null {
+            androidApp(clockApp.key)
+          }
+        }
+        onLongPress: {
+          haptic()
+          showSettings = true
+        }
+      }
+      Text {
+        text: fmtTime(now, "EEE, d MMM") + (bat != null ? ", ${bat.level}%" : "")
+        font: activeFont
+        fontSize: round(15 * textSize)
+        fontWeight: appWeight
+        letterSpacing: 0
+        color: alpha(foreground, 0.9)
+        maxLines: 1
+        align: textAlignment
+        padding: [2, 0]
+        onTap: {
+          if calApp != null {
+            androidApp(calApp.key)
+          } else {
+            url("content://com.android.calendar/time/")
+          }
+        }
+        onLongPress: {
+          haptic()
+          showSettings = true
+        }
+      }
+      if showScreenTime {
+        Text {
+          text: bat != null ? "battery: ${bat.level}% · screen time on" : "screen time on"
+          fontSize: 13
+          fontWeight: 400
+          color: alpha(foreground, 0.6)
+          align: textAlignment
+          padding: [2, 0]
+        }
+      }
+    }
+  }
+
+  component SlotItem(slotKey, i) {
+    let isPhone = slotKey == "special:phone" || (phone != null && slotKey == phone.key)
+    let isMsgs = slotKey == "special:messages" || (msgs != null && slotKey == msgs.key)
+    let itemApp = isPhone ? phone : (isMsgs ? msgs : (apps ?? []).find(a => a.key == slotKey || a.package == slotKey))
+    let badge = isPhone ? missed : (isMsgs ? unread : 0)
+    let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "Select App"))
+    let label = (renames ?? {})[slotKey] ?? ((renames ?? {})[str(i)] ?? defaultName)
+
+    Text {
+      spans: [label, badge > 0 ? {text: "  ${badge}", color: accent, fontSize: 15, fontWeight: 400} : ""]
+      font: activeFont
+      fontSize: appSize
+      fontWeight: appWeight
+      letterSpacing: -0.5
+      maxLines: 1
+      fill: width
+      align: textAlignment
+      padding: [8, 0]
+      onTap: {
+        if isPhone {
+          if phone != null { androidApp(phone.key) } else { url("tel:") }
+        } else if isMsgs {
+          if msgs != null { androidApp(msgs.key) } else { url("sms:") }
+        } else if itemApp != null {
+          androidApp(itemApp.key)
+        } else if startsWith(slotKey, "com.") || startsWith(slotKey, "org.") {
+          androidApp(slotKey)
+        } else {
+          haptic()
+          pickerSlot = i
+          search = ""
+        }
+      }
+      onLongPress: {
+        haptic()
+        actionSlot = i
+      }
+    }
+  }
+
+  // The apps as Title Case words, aligned per setting
+  component Apps() {
+    Column {
+      gap: 0
+      fill: width
+      align: textAlignment
+      for k, i in activeSlots key k + ":" + i {
+        SlotItem { slotKey: k; i: i }
+      }
+    }
+  }
+
+  // Bottom action bar
+  component BottomBar() {
+    Row {
+      fill: width
+      align: center
+      Text {
+        text: "search"
+        font: activeFont
+        fontSize: 13
+        fontWeight: 400
+        letterSpacing: 2
+        color: alpha(foreground, 0.45)
+        padding: [6, 12]
+        onTap: launcher("drawer")
+      }
+      Spacer { weight: 1 }
+      Text {
+        text: "settings"
+        font: activeFont
+        fontSize: 13
+        fontWeight: 400
+        letterSpacing: 2
+        color: alpha(foreground, 0.45)
+        padding: [6, 12]
+        onTap: {
+          haptic()
+          showSettings = true
+        }
+      }
+      Spacer { weight: 1 }
+      Text {
+        text: "+ app"
+        font: activeFont
+        fontSize: 13
+        fontWeight: 400
+        letterSpacing: 2
+        color: alpha(foreground, 0.45)
+        padding: [6, 12]
+        onTap: {
+          haptic()
+          pickerSlot = -1
+          search = ""
+        }
+      }
+    }
+  }
+
+  // Action sheet for long-press on an app slot
+  component ActionSheet() {
+    let cur = slots ?? defaultSlots
+    let targetKey = cur[actionSlot]
+    let isPhone = targetKey == "special:phone" || (phone != null && targetKey == phone.key)
+    let isMsgs = targetKey == "special:messages" || (msgs != null && targetKey == msgs.key)
+    let itemApp = isPhone ? phone : (isMsgs ? msgs : (apps ?? []).find(a => a.key == targetKey || a.package == targetKey))
+    let defaultName = isPhone ? "Phone" : (isMsgs ? "Messages" : (itemApp != null ? itemApp.name : "Select App"))
+    let targetName = (renames ?? {})[targetKey] ?? ((renames ?? {})[str(actionSlot)] ?? defaultName)
+    Column {
+      fill: true
+      padding: wide ? [40, 24] : [24, 20]
+      onTap: actionSlot = null
+      Spacer { weight: 1 }
+      Column {
+        fill: width
+        background: alpha(surface, 0.96)
+        border: 1
+        borderColor: alpha(border, 0.4)
+        radius: 16 * corners
+        padding: [16, 20]
+        gap: 4
+        Row {
+          fill: width
+          align: center
+          padding: [0, 4, 8, 4]
+          Text {
+            text: targetName
+            fontSize: 18
+            fontWeight: 500
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: "✕"
+            fontSize: 16
+            color: muted
+            padding: [4, 8]
+            onTap: actionSlot = null
+          }
+        }
+        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Text {
+          text: "Change App"
+          fontSize: 16
+          fontWeight: 400
+          fill: width
+          padding: [14, 4]
+          onTap: {
+            let target = actionSlot
+            actionSlot = null
+            pickerSlot = target
+            search = ""
+          }
+        }
+        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Text {
+          text: "Rename"
+          fontSize: 16
+          fontWeight: 400
+          fill: width
+          padding: [14, 4]
+          onTap: {
+            let target = actionSlot
+            actionSlot = null
+            renamingSlot = target
+            renameText = targetName
+          }
+        }
+        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Text {
+          text: "Change Wallpaper"
+          fontSize: 16
+          fontWeight: 400
+          fill: width
+          padding: [14, 4]
+          onTap: {
+            actionSlot = null
+            haptic()
+            run("[ -f ~/.config/omalauncher/wallpaper.sh ] && bash ~/.config/omalauncher/wallpaper.sh")
+          }
+        }
+        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Text {
+          text: "minarchy settings"
+          fontSize: 16
+          fontWeight: 400
+          fill: width
+          padding: [14, 4]
+          onTap: {
+            actionSlot = null
+            haptic()
+            showSettings = true
+          }
+        }
+        Spacer { height: 1; fill: width; background: alpha(border, 0.3) }
+        Text {
+          text: "Remove from home"
+          fontSize: 16
+          fontWeight: 400
+          color: red
+          fill: width
+          padding: [14, 4]
+          onTap: {
+            let target = actionSlot
+            actionSlot = null
+            slots = remove(cur, target)
+          }
+        }
+      }
+      Spacer { height: screenInset + 16 }
+    }
+  }
+
+  // Inline rename dialog
+  component RenameModal() {
+    Column {
+      fill: true
+      padding: wide ? [40, 24] : [36, 24]
+      Spacer { weight: 1 }
+      Column {
+        fill: width
+        background: alpha(surface, 0.96)
+        border: 1
+        borderColor: alpha(border, 0.6)
+        radius: 16 * corners
+        padding: [20, 20]
+        gap: 14
+        Text {
+          text: "Rename App"
+          fontSize: 18
+          fontWeight: 400
+        }
+        Input {
+          text: renameText
+          placeholder: "App name or emoji"
+          fill: width
+          underline: false
+          padding: [10, 12]
+          background: alpha(background, 0.5)
+          radius: 8 * corners
+          onChange: renameText = value
+          onSubmit: {
+            if renamingSlot != null {
+              let cur = slots ?? defaultSlots
+              if renamingSlot >= 0 && renamingSlot < len(cur) {
+                let targetKey = cur[renamingSlot]
+                if trim(renameText) != "" {
+                  renames = set(renames ?? {}, targetKey, trim(renameText))
+                }
+              }
+            }
+            renamingSlot = null
+            renameText = ""
+          }
+        }
+        Row {
+          fill: width
+          align: center
+          Text {
+            text: "Cancel"
+            fontSize: 14
+            color: muted
+            padding: [6, 10]
+            onTap: {
+              renamingSlot = null
+              renameText = ""
+            }
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: "Save"
+            fontSize: 14
+            color: accent
+            fontWeight: 400
+            padding: [6, 10]
+            onTap: {
+              if renamingSlot != null {
+                let cur = slots ?? defaultSlots
+                if renamingSlot >= 0 && renamingSlot < len(cur) {
+                  let targetKey = cur[renamingSlot]
+                  if trim(renameText) != "" {
+                    renames = set(renames ?? {}, targetKey, trim(renameText))
+                  }
+                }
+              }
+              renamingSlot = null
+              renameText = ""
+            }
+          }
+        }
+      }
+      Spacer { weight: 1 }
+      Spacer { height: screenInset }
+    }
+  }
+
+  // App picker view to select an app for a slot or add a new slot.
+  component Picker() {
+    Column {
+      fill: true
+      gap: 12
+      padding: wide ? [40, 24] : [36, 24]
+      Spacer { height: 16 }
+      Row {
+        fill: width
+        align: center
+        Text {
+          text: pickerSlot == -1 ? "Add App" : "Change App"
+          fontSize: 24
+          fontWeight: 300
+          letterSpacing: -0.5
+        }
+        Spacer { weight: 1 }
+        Text {
+          text: "Cancel"
+          fontSize: 13
+          fontWeight: 400
+          letterSpacing: 2
+          color: muted
+          padding: [6, 8]
+          onTap: {
+            pickerSlot = null
+            search = ""
+          }
+        }
+      }
+      if pickerSlot >= 0 {
+        Row {
+          fill: width
+          Text {
+            text: "✕  Remove from home"
+            fontSize: 14
+            fontWeight: 400
+            letterSpacing: 1
+            color: red
+            padding: [4, 0]
+            onTap: {
+              let cur = slots ?? defaultSlots
+              slots = remove(cur, pickerSlot)
+              pickerSlot = null
+              search = ""
+            }
+          }
+        }
+      }
+      Input {
+        placeholder: "Search apps"
+        fill: width
+        underline: false
+        padding: [10, 12]
+        background: alpha(surface, 0.4)
+        radius: 8 * corners
+        onChange: search = value
+      }
+      Column {
+        weight: 1
+        fill: width
+        scroll: true
+        lazy: true
+        gap: 2
+        for a in pickerApps key a.key {
+          Text {
+            text: a.name
+            fontSize: 22
+            fontWeight: 300
+            letterSpacing: -0.5
+            fill: width
+            padding: [8, 4]
+            onTap: {
+              let cur = slots ?? defaultSlots
+              slots = pickerSlot == -1 ? cur + [a.key] : set(cur, pickerSlot, a.key)
+              pickerSlot = null
+              search = ""
+            }
+          }
+        }
+      }
+      Spacer { height: screenInset }
+    }
+  }
+
+  // Settings View matching screenshots 154778.png & 154779.png
+  component SettingsView() {
+    Column {
+      fill: true
+      scroll: true
+      gap: 16
+      padding: wide ? [36, 40] : [24, 20]
+
+      // Top bar with Done button
+      Row {
+        fill: width
+        align: center
+        padding: [8, 4]
+        Text {
+          text: "minarchy settings"
+          fontSize: 22
+          fontWeight: 500
+        }
+        Spacer { weight: 1 }
+        Text {
+          text: "Done"
+          fontSize: 16
+          fontWeight: 500
+          color: accent
+          padding: [6, 12]
+          onTap: {
+            haptic()
+            showSettings = false
+          }
+        }
+      }
+
+      // Card 1: Launcher Header Card
+      Column {
+        fill: width
+        background: alpha(surface, 0.45)
+        border: 1
+        borderColor: alpha(border, 0.3)
+        radius: 20 * corners
+        padding: [16, 20]
+        gap: 2
+
+        Row {
+          fill: width
+          align: center
+          padding: [4, 0, 12, 0]
+          Column {
+            Text {
+              text: launcherTitle ?? "minarchy"
+              font: activeFont
+              fontSize: 24
+              fontWeight: 700
+            }
+            Text {
+              text: "distraction-free home for omalauncher"
+              font: activeFont
+              fontSize: 12
+              color: muted
+            }
+          }
+        }
+      }
+
+      // Card 2: Home screen Card
+      Column {
+        fill: width
+        background: alpha(surface, 0.45)
+        border: 1
+        borderColor: alpha(border, 0.3)
+        radius: 20 * corners
+        padding: [16, 20]
+        gap: 2
+
+        Text {
+          text: "Home screen"
+          fontSize: 24
+          fontWeight: 400
+          padding: [4, 0, 12, 0]
+        }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            let appCounts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12]
+            let idx = indexOf(appCounts, numApps)
+            let nextIdx = idx < 0 ? 8 : (idx + 1) % len(appCounts)
+            numApps = appCounts[nextIdx]
+          }
+          Text {
+            text: "Apps on home screen"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: str(numApps)
+            fontSize: 16
+            fontWeight: 600
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            showDateTime = !showDateTime
+          }
+          Text {
+            text: "Show date time"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: showDateTime ? "On" : "Off"
+            fontSize: 16
+            fontWeight: 600
+            color: showDateTime ? foreground : muted
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            let formats = ["12-hour", "24-hour", "12-hour (AM/PM)"]
+            let idx = indexOf(formats, clockFormat)
+            let nextIdx = idx < 0 ? 0 : (idx + 1) % len(formats)
+            clockFormat = formats[nextIdx]
+          }
+          Text {
+            text: "Time format"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: clockFormat
+            fontSize: 16
+            fontWeight: 600
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            appAlignment = appAlignment == "Left" ? "Center" : (appAlignment == "Center" ? "Right" : "Left")
+          }
+          Text {
+            text: "App alignment"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: appAlignment
+            fontSize: 16
+            fontWeight: 600
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            showScreenTime = !showScreenTime
+          }
+          Text {
+            text: "Screen time"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: showScreenTime ? "On" : "Off"
+            fontSize: 16
+            fontWeight: 600
+            color: showScreenTime ? foreground : muted
+          }
+        }
+      }
+
+      // Card 3: Appearance Card
+      Column {
+        fill: width
+        background: alpha(surface, 0.45)
+        border: 1
+        borderColor: alpha(border, 0.3)
+        radius: 20 * corners
+        padding: [16, 20]
+        gap: 2
+
+        Text {
+          text: "Appearance"
+          fontSize: 24
+          fontWeight: 400
+          padding: [4, 0, 12, 0]
+        }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            run("[ -f ~/.config/omalauncher/wallpaper.sh ] && bash ~/.config/omalauncher/wallpaper.sh")
+          }
+          Text {
+            text: "Change wallpaper"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: "Next ❯"
+            fontSize: 15
+            fontWeight: 600
+            color: accent
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            launcher("style")
+          }
+          Text {
+            text: "Wallpaper & Theme style"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: "Open ❯"
+            fontSize: 15
+            color: muted
+          }
+        }
+
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            dailyWallpaper = !dailyWallpaper
+          }
+          Text {
+            text: "Daily new wallpaper"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: dailyWallpaper ? "On" : "Off"
+            fontSize: 16
+            fontWeight: 600
+            color: dailyWallpaper ? foreground : muted
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            showStatusBar = !showStatusBar
+          }
+          Text {
+            text: "Notification bar"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: showStatusBar ? "On" : "Off"
+            fontSize: 16
+            fontWeight: 600
+            color: showStatusBar ? foreground : muted
+          }
+        }
+
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            boldFont = !boldFont
+          }
+          Text {
+            text: "Bold font"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: boldFont ? "On" : "Off"
+            fontSize: 16
+            fontWeight: 600
+            color: boldFont ? foreground : muted
+          }
+        }
+
+        Spacer { height: 1; fill: width; background: alpha(border, 0.2) }
+
+        Row {
+          fill: width
+          align: center
+          padding: [12, 0]
+          onTap: {
+            haptic()
+            let sizes = [0.8, 1.0, 1.2, 1.4]
+            let sIdx = indexOf(sizes, textSize)
+            let nextSIdx = sIdx < 0 ? 1 : (sIdx + 1) % len(sizes)
+            textSize = sizes[nextSIdx]
+          }
+          Text {
+            text: "Text size"
+            fontSize: 16
+            fontWeight: 400
+          }
+          Spacer { weight: 1 }
+          Text {
+            text: str(textSize)
+            fontSize: 16
+            fontWeight: 600
+          }
+        }
+      }
+
+
+
+      Spacer { height: screenInset + 20 }
+    }
+  }
+
+  // Screen layout
+  if showSettings {
+    SettingsView { }
+  } else if actionSlot != null {
+    ActionSheet { }
+  } else if renamingSlot != null {
+    RenameModal { }
+  } else if pickerSlot != null {
+    Picker { }
+  } else if wide {
+    Row {
+      fill: true
+      gap: 56
+      padding: [40, 20]
+      onLongPress: {
+        haptic()
+        showSettings = true
+      }
+      if showDateTime {
+        Column {
+          weight: 1
+          gap: 0
+          align: textAlignment
+          Spacer { weight: 1 }
+          Day { }
+          Spacer { weight: 1 }
+        }
+      }
+      Column {
+        weight: 1
+        gap: 0
+        align: textAlignment
+        Spacer { weight: 1 }
+        Apps { }
+        Spacer { weight: 1 }
+        BottomBar { }
+        Spacer { height: screenInset }
+      }
+    }
+  } else {
+    Column {
+      fill: true
+      gap: 0
+      padding: [32, 24]
+      onLongPress: {
+        haptic()
+        showSettings = true
+      }
+      Spacer { height: 36 }
+      if showDateTime {
+        Day { }
+      }
+      Spacer { weight: 1 }
+      Apps { }
+      Spacer { weight: 1 }
+      BottomBar { }
+      Spacer { height: screenInset + 12 }
+    }
+  }
+}
